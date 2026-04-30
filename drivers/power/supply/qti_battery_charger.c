@@ -13,7 +13,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/reboot.h>
 #include <linux/rpmsg.h>
 #include <linux/mutex.h>
 #include <linux/pm_wakeup.h>
@@ -621,6 +620,7 @@ static const char * const POWER_SUPPLY_VENDOR_TEXT[] = {
 	[POWER_SUPPLY_VENDOR_NVT]		= "NVT",
 	[POWER_SUPPLY_VENDOR_SCUD]		= "SCUD",
 	[POWER_SUPPLY_VENDOR_TWS]		= "TWS",
+	[POWER_SUPPLY_VENDOR_LISHEN]		= "LISHEN",
 	[POWER_SUPPLY_VENDOR_DESAY]		= "DESAY",
 };
 
@@ -1168,43 +1168,41 @@ static u32 xm_calculate_soc(u32 batt_soc, u32 xm_soc) {
 	return mult_frac(batt_soc, batt_diff, range) + mult_frac(xm_soc, range - batt_diff, range);
 }
 
-static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev) {
-	struct psy_state *pst;
-	struct psy_state *xm_pst;
+static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev)
+{
+	struct psy_state *pst, *xm_pst;
 	u32 batt_soc, xm_soc, ret_soc;
 	int rc;
 
-	if (!bcdev) {
-		pr_err("bcdev is null");
+	if (!bcdev)
 		return 0;
-	}
 
-	pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
+	pst    = &bcdev->psy_list[PSY_TYPE_BATTERY];
 	xm_pst = &bcdev->psy_list[PSY_TYPE_XM];
-
-	if (!pst || !xm_pst) {
-		pr_err("pst and/or xm_pst is null");
-		return 0;
-	}
 
 	rc = read_property_id(bcdev, pst, BATT_CAPACITY);
 	if (rc < 0) {
-		pr_err("Could not read BATT_CAPACITY from pst");
+		pr_err("Failed to read BATT_CAPACITY: %d\n", rc);
 		return 0;
 	}
 
 	rc = read_property_id(bcdev, xm_pst, XM_PROP_FG1_RSOC);
 	if (rc < 0) {
-		pr_err("Could not read XM_PROP_FG1_RSOC from xm_pst");
+		pr_err("Failed to read FG1_RSOC: %d\n", rc);
 		return 0;
 	}
 
+	/* BATT_CAPACITY: centipercent (0-10000) -> percent (0-100) */
 	batt_soc = DIV_ROUND_CLOSEST(pst->prop[BATT_CAPACITY], 100);
-	xm_soc = xm_pst->prop[XM_PROP_FG1_RSOC];
+
+	/* FG RSOC: millipercentage (0-100000) -> percent (0-100) */
+	xm_soc = DIV_ROUND_CLOSEST(xm_pst->prop[XM_PROP_FG1_RSOC], 1000);
 
 	ret_soc = xm_calculate_soc(batt_soc, xm_soc);
+	ret_soc = clamp(ret_soc, 0U, 100U);
 
-	pr_info("batt_soc %d, xm_soc %d, ret_soc %d", batt_soc, xm_soc, ret_soc);
+	pr_info("batt_soc %u, fg1_rsoc %u, ret_soc %u\n",
+		batt_soc, xm_soc, ret_soc);
 
 	return ret_soc;
 }
@@ -1988,6 +1986,23 @@ static int battery_psy_get_prop(struct power_supply *psy,
 	if (prop == POWER_SUPPLY_PROP_TIME_TO_FULL_NOW)
 		prop = POWER_SUPPLY_PROP_TIME_TO_FULL_AVG;
 
+	/*
+	 * CAPACITY_LEVEL is derived locally from SOC; bypass firmware path.
+	 */
+	if (prop == POWER_SUPPLY_PROP_CAPACITY_LEVEL) {
+		u32 soc = xm_get_battery_capacity(bcdev);
+
+		if (soc >= 100)
+			pval->intval = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		else if (soc <= 5)
+			pval->intval = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+		else if (soc <= 15)
+			pval->intval = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+		else
+			pval->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+		return 0;
+	}
+
 	prop_id = get_property_id(pst, prop);
 	if (prop_id < 0)
 		return prop_id;
@@ -2081,6 +2096,7 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
