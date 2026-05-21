@@ -1773,8 +1773,12 @@ nfsd4_decode_layoutreturn(struct nfsd4_compoundargs *argp,
 static __be32 nfsd4_decode_secinfo_no_name(struct nfsd4_compoundargs *argp,
 					   struct nfsd4_secinfo_no_name *sin)
 {
+	struct nfsd4_secinfo_no_name *sin = &u->secinfo_no_name;
+
+	sin->sin_exp = NULL;
 	if (xdr_stream_decode_u32(argp->xdr, &sin->sin_style) < 0)
 		return nfserr_bad_xdr;
+
 	return nfs_ok;
 }
 
