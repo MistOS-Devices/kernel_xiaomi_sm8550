@@ -947,8 +947,6 @@ batadv_tt_prepare_tvlv_local_data(struct batadv_priv *bat_priv,
 	u16 total_entries = 0;
 	u16 tvlv_len;
 	u8 *tt_change_ptr;
-	int vlan_entries;
-	u16 sum_entries;
 
 	spin_lock_bh(&bat_priv->softif_vlan_list_lock);
 	hlist_for_each_entry(vlan, &bat_priv->softif_vlan_list, list) {
