@@ -259,7 +259,7 @@ static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 		if (!offmask && cur % 4) {
 			NL_SET_ERR_MSG_MOD(extack, "Offsets must be on 32bit boundaries");
 			ret = -EINVAL;
-			goto out_free_keys;
+			goto put_chain;
 		}
 
 		/* sanitize the shift value for any later use */
@@ -267,6 +267,14 @@ static int tcf_pedit_init(struct net *net, struct nlattr *nla,
 						   BITS_PER_TYPE(int) - 1,
 						   nparms->tcfp_keys[i].shift);
 
+		/* The AT option can read a single byte, we can bound the actual
+		 * value with uchar max.
+		 */
+		cur += (0xff & offmask) >> nparms->tcfp_keys[i].shift;
+
+		/* Each key touches 4 bytes starting from the computed offset */
+		nparms->tcfp_off_max_hint =
+			max(nparms->tcfp_off_max_hint, cur + 4);
 	}
 
 	p = to_pedit(*a);
@@ -428,14 +436,9 @@ static int tcf_pedit_act(struct sk_buff *skb, const struct tc_action *a,
 
 			offset += (*d & tkey->offmask) >> tkey->shift;
 			if (offset % 4) {
-				pr_info_ratelimited("tc action pedit offset must be on 32 bit boundaries\n");
+				pr_info("tc action pedit offset must be on 32 bit boundaries\n");
 				goto bad;
 			}
-		}
-
-		if (check_add_overflow(hoffset, offset, &write_offset)) {
-			pr_info_ratelimited("tc action pedit offset overflow\n");
-			goto bad;
 		}
 
 		if (!offset_valid(skb, write_offset, sizeof(*ptr))) {
