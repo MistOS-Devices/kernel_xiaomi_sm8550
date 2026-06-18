@@ -423,8 +423,7 @@ static int tcf_pedit_act(struct sk_buff *skb, const struct tc_action *a,
 			u8 *d, _d;
 			int at_offset;
 
-			if (check_add_overflow(hoffset, (int)tkey->at, &at_offset) ||
-			    !offset_valid(skb, at_offset, sizeof(_d))) {
+			if (!offset_valid(skb, hoffset + tkey->at)) {
 				pr_info_ratelimited("tc action pedit 'at' offset %d out of bounds\n",
 						    hoffset + tkey->at);
 				goto bad;
@@ -436,14 +435,13 @@ static int tcf_pedit_act(struct sk_buff *skb, const struct tc_action *a,
 
 			offset += (*d & tkey->offmask) >> tkey->shift;
 			if (offset % 4) {
-				pr_info("tc action pedit offset must be on 32 bit boundaries\n");
+				pr_info_ratelimited("tc action pedit offset must be on 32 bit boundaries\n");
 				goto bad;
 			}
 		}
 
-		if (!offset_valid(skb, write_offset, sizeof(*ptr))) {
-			pr_info_ratelimited("tc action pedit offset %d out of bounds\n",
-					    write_offset);
+		if (!offset_valid(skb, hoffset + offset)) {
+			pr_info_ratelimited("tc action pedit offset %d out of bounds\n", hoffset + offset);
 			goto bad;
 		}
 
