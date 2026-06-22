@@ -92,8 +92,8 @@ MODULE_PARM_DESC(dump_oops,
 		"set to 1 to dump oopses, 0 to only dump panics (default 1)");
 
 #define MAX_CMDLINE_PARAM_LEN 64
-static char build_fingerprint[MAX_CMDLINE_PARAM_LEN] = {0};
-module_param_string(fingerprint, build_fingerprint, MAX_CMDLINE_PARAM_LEN,0644);
+static char build_fingerprint[256] = {0};
+module_param_string(fingerprint, build_fingerprint, 256,0644);
 
 struct pmsg_platform_data {
 	unsigned long	mem_size;
