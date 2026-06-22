@@ -1688,25 +1688,6 @@ static unsigned short xs_sock_srcport(struct rpc_xprt *xprt)
 	return ret;
 }
 
-static int xs_sock_srcaddr(struct rpc_xprt *xprt, char *buf, size_t buflen)
-{
-	struct sock_xprt *sock = container_of(xprt, struct sock_xprt, xprt);
-	union {
-		struct sockaddr sa;
-		struct sockaddr_storage st;
-	} saddr;
-	int ret = -ENOTCONN;
-
-	mutex_lock(&sock->recv_mutex);
-	if (sock->sock) {
-		ret = kernel_getsockname(sock->sock, &saddr.sa);
-		if (ret >= 0)
-			ret = snprintf(buf, buflen, "%pISc", &saddr.sa);
-	}
-	mutex_unlock(&sock->recv_mutex);
-	return ret;
-}
-
 static unsigned short xs_next_srcport(struct sock_xprt *transport, unsigned short port)
 {
 	if (transport->srcport != 0)

@@ -108,18 +108,18 @@ static ssize_t rpc_sysfs_xprt_srcaddr_show(struct kobject *kobj,
 	size_t buflen = PAGE_SIZE;
 	ssize_t ret = -ENOTSOCK;
 
-	if (!xprt || !xprt_connected(xprt)) {
-		ret = -ENOTCONN;
-	} else if (xprt->ops->get_srcaddr) {
-		ret = xprt->ops->get_srcaddr(xprt, buf, buflen);
-		if (ret > 0) {
-			if (ret < buflen - 1) {
-				buf[ret] = '\n';
-				ret++;
-				buf[ret] = '\0';
-			}
-		}
-	}
+	if (!xprt)
+		return 0;
+
+	sock = container_of(xprt, struct sock_xprt, xprt);
+	mutex_lock(&sock->recv_mutex);
+	if (sock->sock == NULL ||
+	    kernel_getsockname(sock->sock, (struct sockaddr *)&saddr) < 0)
+		goto out;
+
+	ret = sprintf(buf, "%pISc\n", &saddr);
+out:
+	mutex_unlock(&sock->recv_mutex);
 	xprt_put(xprt);
 	return ret;
 }
