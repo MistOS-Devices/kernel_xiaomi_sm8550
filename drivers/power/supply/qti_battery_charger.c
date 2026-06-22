@@ -1131,7 +1131,7 @@ static struct power_supply_desc usb_psy_desc;
  *	Otherwise -> returns the weighted average, so that as batt_soc approaches the threshold, the
  *	returned value approaches to xm_soc
  */
-static u32 xm_calculate_soc(u32 batt_soc, u32 xm_soc) {
+static u32 __maybe_unused xm_calculate_soc(u32 batt_soc, u32 xm_soc) {
 	u32 range, batt_diff;
 
 	range = 100 - FG_SOC_THRESHOLD;
@@ -1145,8 +1145,7 @@ static u32 xm_calculate_soc(u32 batt_soc, u32 xm_soc) {
 
 static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev) {
 	struct psy_state *pst;
-	struct psy_state *xm_pst;
-	u32 batt_soc, xm_soc, ret_soc;
+	u32 ret_soc;
 	int rc;
 
 	if (!bcdev) {
@@ -1155,10 +1154,9 @@ static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev) {
 	}
 
 	pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
-	xm_pst = &bcdev->psy_list[PSY_TYPE_XM];
 
-	if (!pst || !xm_pst) {
-		pr_err("pst and/or xm_pst is null");
+	if (!pst) {
+		pr_err("pst is null");
 		return 0;
 	}
 
@@ -1168,18 +1166,16 @@ static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev) {
 		return 0;
 	}
 
-	rc = read_property_id(bcdev, xm_pst, XM_PROP_FG1_RSOC);
-	if (rc < 0) {
-		pr_err("Could not read XM_PROP_FG1_RSOC from xm_pst");
-		return 0;
-	}
+	/*
+	 * Report the PMIC/ADSP fuel-gauge SoC directly (already 0-100).
+	 * The previous code blended in XM_PROP_FG1_RSOC via xm_calculate_soc(),
+	 * but that property is not populated on this firmware and returned
+	 * garbage SoC everywhere except exactly 100%.
+	 */
+	/* ADSP reports SoC in centi-percent (0-10000); scale to 0-100. */
+	ret_soc = DIV_ROUND_CLOSEST(pst->prop[BATT_CAPACITY], 100);
 
-	batt_soc = DIV_ROUND_CLOSEST(pst->prop[BATT_CAPACITY], 100);
-	xm_soc = xm_pst->prop[XM_PROP_FG1_RSOC];
-
-	ret_soc = xm_calculate_soc(batt_soc, xm_soc);
-
-	pr_info("batt_soc %d, xm_soc %d, ret_soc %d", batt_soc, xm_soc, ret_soc);
+	pr_info("adsp_soc %d, ret_soc %d", pst->prop[BATT_CAPACITY], ret_soc);
 
 	return ret_soc;
 }
