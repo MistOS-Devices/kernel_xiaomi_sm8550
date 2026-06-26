@@ -1253,7 +1253,7 @@ out:
  * Return: true if the packed has been successfully processed, false otherwise
  */
 static bool batadv_tp_handle_out_of_order(struct batadv_tp_vars *tp_vars,
-					  u32 seqno, u32 payload_len)
+					  const struct sk_buff *skb)
 	__must_hold(&tp_vars->unacked_lock)
 {
 	struct batadv_tp_unacked *un, *new;
@@ -1270,7 +1270,7 @@ static bool batadv_tp_handle_out_of_order(struct batadv_tp_vars *tp_vars,
 	if (list_empty(&tp_vars->unacked_list)) {
 		list_add(&new->list, &tp_vars->unacked_list);
 		tp_vars->unacked_count++;
-		goto out;
+		return true;
 	}
 
 	/* otherwise loop over the list and either drop the packet because this
@@ -1308,15 +1308,6 @@ static bool batadv_tp_handle_out_of_order(struct batadv_tp_vars *tp_vars,
 	if (!added) {
 		list_add(&new->list, &tp_vars->unacked_list);
 		tp_vars->unacked_count++;
-	}
-
-	/* remove the last (biggest) unacked seqno when list is too large */
-	if (tp_vars->unacked_count > BATADV_TP_MAX_UNACKED) {
-		un = list_last_entry(&tp_vars->unacked_list,
-				     struct batadv_tp_unacked, list);
-		list_del(&un->list);
-		kfree(un);
-		tp_vars->unacked_count--;
 	}
 
 	/* remove the last (biggest) unacked seqno when list is too large */
@@ -1442,7 +1433,7 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
 {
 	const struct batadv_icmp_tp_packet *icmp;
 	struct batadv_tp_vars *tp_vars;
-	u32 payload_len;
+	size_t packet_size;
 	u32 to_ack;
 	u32 seqno;
 
@@ -1472,6 +1463,8 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
 		WRITE_ONCE(tp_vars->last_recv_time, jiffies);
 	}
 
+	spin_lock_bh(&tp_vars->unacked_lock);
+
 	/* if the packet is a duplicate, it may be the case that an ACK has been
 	 * lost. Resend the ACK
 	 */
@@ -1485,7 +1478,7 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
 		/* exit immediately (and do not send any ACK) if the packet has
 		 * not been enqueued correctly
 		 */
-		if (!batadv_tp_handle_out_of_order(tp_vars, seqno, payload_len)) {
+		if (!batadv_tp_handle_out_of_order(tp_vars, skb)) {
 			spin_unlock_bh(&tp_vars->unacked_lock);
 			goto out;
 		}
