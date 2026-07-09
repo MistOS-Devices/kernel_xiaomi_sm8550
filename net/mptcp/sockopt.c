@@ -231,14 +231,10 @@ static int mptcp_setsockopt_sol_socket_timestamping(struct mptcp_sock *msk,
 
 	mptcp_for_each_subflow(msk, subflow) {
 		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-		int err;
 
 		lock_sock(ssk);
-		err = sock_set_timestamping(ssk, optname, timestamping);
+		sock_set_timestamping(ssk, optname, timestamping);
 		release_sock(ssk);
-
-		if (err < 0 && ret == 0)
-			ret = err;
 	}
 
 	release_sock(sk);

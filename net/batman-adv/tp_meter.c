@@ -1373,6 +1373,11 @@ batadv_tp_init_recv(struct batadv_priv *bat_priv,
 		goto out_unlock;
 
 	tp_vars = batadv_tp_list_find_session(bat_priv, icmp->orig,
+					      icmp->session);
+	if (tp_vars)
+		goto out_unlock;
+
+	tp_vars = batadv_tp_list_find_session(bat_priv, icmp->orig,
 					      icmp->session, BATADV_TP_RECEIVER);
 	if (tp_vars) {
 		WRITE_ONCE(tp_vars->last_recv_time, jiffies);

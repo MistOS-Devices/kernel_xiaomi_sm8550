@@ -6453,8 +6453,7 @@ static inline int l2cap_ecred_reconf_rsp(struct l2cap_conn *conn,
 		if (chan->ident != cmd->ident)
 			continue;
 
-		if (!l2cap_chan_hold_unless_zero(chan))
-			continue;
+		l2cap_chan_hold(chan);
 		l2cap_chan_lock(chan);
 
 		l2cap_chan_del(chan, ECONNRESET);

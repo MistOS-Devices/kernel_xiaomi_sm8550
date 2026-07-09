@@ -1252,7 +1252,7 @@ static void batadv_bla_purge_backbone_gw(struct batadv_priv *bat_priv, int now)
 						  head, hash_entry) {
 				if (now)
 					goto purge_now;
-				if (!batadv_has_timed_out(READ_ONCE(backbone_gw->lasttime),
+				if (!batadv_has_timed_out(backbone_gw->lasttime,
 							  BATADV_BLA_BACKBONE_TIMEOUT))
 					continue;
 
@@ -1264,12 +1264,8 @@ purge_now:
 				purged = true;
 
 				/* don't wait for the pending request anymore */
-				spin_lock_bh(&bat_priv->bla.num_requests_lock);
-				if (backbone_gw->state == BATADV_BLA_BACKBONE_GW_UNSYNCED)
+				if (atomic_read(&backbone_gw->request_sent))
 					atomic_dec(&bat_priv->bla.num_requests);
-
-				backbone_gw->state = BATADV_BLA_BACKBONE_GW_STOPPED;
-				spin_unlock_bh(&bat_priv->bla.num_requests_lock);
 
 				batadv_bla_del_backbone_claims(backbone_gw);
 
