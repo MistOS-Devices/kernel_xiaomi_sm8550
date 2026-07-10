@@ -546,7 +546,6 @@ static void dz_reset(struct dz_port *dport)
 	struct dz_mux *mux = dport->mux;
 	unsigned short tcr;
 	int loops = 10000;
-	int line;
 
 	if (mux->initialised)
 		return;
