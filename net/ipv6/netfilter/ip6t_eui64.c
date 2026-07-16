@@ -22,10 +22,8 @@ eui64_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	unsigned char eui64[8];
 
-	if (!skb->dev || skb->dev->type != ARPHRD_ETHER)
-		return false;
-
-	if (!skb_mac_header_was_set(skb) || skb_mac_header_len(skb) < ETH_HLEN) {
+	if (!(skb_mac_header(skb) >= skb->head &&
+	      skb_mac_header(skb) + ETH_HLEN <= skb->data)) {
 		par->hotdrop = true;
 		return false;
 	}

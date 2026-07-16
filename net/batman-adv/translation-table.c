@@ -853,18 +853,11 @@ batadv_tt_prepare_tvlv_global_data(struct batadv_orig_node *orig_node,
 	u16 total_entries = 0;
 	u8 *tt_change_ptr;
 	int vlan_entries;
-	u16 sum_entries;
 
 	spin_lock_bh(&orig_node->vlan_list_lock);
 	hlist_for_each_entry(vlan, &orig_node->vlan_list, list) {
 		vlan_entries = atomic_read(&vlan->tt.num_entries);
-
-		if (check_add_overflow(vlan_entries, total_entries, &sum_entries)) {
-			*tt_len = 0;
-			goto out;
-		}
-
-		total_entries = sum_entries;
+		total_entries += vlan_entries;
 		num_vlan++;
 	}
 
@@ -960,13 +953,7 @@ batadv_tt_prepare_tvlv_local_data(struct batadv_priv *bat_priv,
 	spin_lock_bh(&bat_priv->softif_vlan_list_lock);
 	hlist_for_each_entry(vlan, &bat_priv->softif_vlan_list, list) {
 		vlan_entries = atomic_read(&vlan->tt.num_entries);
-
-		if (check_add_overflow(vlan_entries, total_entries, &sum_entries)) {
-			tvlv_len = 0;
-			goto out;
-		}
-
-		total_entries = sum_entries;
+		total_entries += vlan_entries;
 		num_vlan++;
 	}
 

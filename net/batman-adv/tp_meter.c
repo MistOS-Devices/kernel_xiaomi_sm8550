@@ -475,8 +475,8 @@ static void batadv_tp_sender_end(struct batadv_priv *bat_priv,
 static void batadv_tp_sender_shutdown(struct batadv_tp_vars *tp_vars,
 				      enum batadv_tp_meter_reason reason)
 {
-	atomic_cmpxchg(&tp_vars->send_result, 0, reason);
-}
+	if (atomic_xchg(&tp_vars->sending, 0) != 1)
+		return;
 
 /**
  * batadv_tp_sender_stopped() - check if tp session was stopped with reason
@@ -695,7 +695,10 @@ static void batadv_tp_recv_ack(struct batadv_priv *bat_priv,
 	if (unlikely(!tp_vars))
 		return;
 
-	if (unlikely(batadv_tp_sender_stopped(tp_vars)))
+	if (unlikely(tp_vars->role != BATADV_TP_SENDER))
+		goto out;
+
+	if (unlikely(atomic_read(&tp_vars->sending) == 0))
 		goto out;
 
 	/* old ACK? silently drop it.. */
@@ -922,7 +925,8 @@ static int batadv_tp_send(void *arg)
 				   "Meter: %s() cannot send packets (%d)\n",
 				   __func__, err);
 			/* ensure nobody else tries to stop the thread now */
-			batadv_tp_sender_shutdown(tp_vars, err);
+			if (atomic_xchg(&tp_vars->sending, 0) == 1)
+				tp_vars->reason = err;
 			break;
 		}
 
@@ -1006,7 +1010,8 @@ void batadv_tp_start(struct batadv_priv *bat_priv, const u8 *dst,
 		return;
 	}
 
-	if (batadv_tp_list_active(bat_priv, dst)) {
+	tp_vars = batadv_tp_list_find(bat_priv, dst);
+	if (tp_vars) {
 		spin_unlock_bh(&bat_priv->tp_list_lock);
 		batadv_dbg(BATADV_DBG_TP_METER, bat_priv,
 			   "Meter: test to or from the same node already ongoing, aborting\n");
@@ -1136,7 +1141,11 @@ void batadv_tp_stop(struct batadv_priv *bat_priv, const u8 *dst,
 		goto out_put_orig_node;
 	}
 
+	if (unlikely(tp_vars->role != BATADV_TP_SENDER))
+		goto out_put_tp_vars;
+
 	batadv_tp_sender_shutdown(tp_vars, return_value);
+out_put_tp_vars:
 	batadv_tp_vars_put(tp_vars);
 out_put_orig_node:
 	batadv_orig_node_put(orig_node);
@@ -1400,6 +1409,11 @@ batadv_tp_init_recv(struct batadv_priv *bat_priv,
 
 	spin_lock_bh(&bat_priv->tp_list_lock);
 	if (atomic_read(&bat_priv->mesh_state) != BATADV_MESH_ACTIVE)
+		goto out_unlock;
+
+	tp_vars = batadv_tp_list_find_session(bat_priv, icmp->orig,
+					      icmp->session);
+	if (tp_vars)
 		goto out_unlock;
 
 	tp_vars = batadv_tp_list_find_session(bat_priv, icmp->orig,

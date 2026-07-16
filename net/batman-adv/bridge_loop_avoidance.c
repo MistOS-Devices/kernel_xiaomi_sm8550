@@ -1252,7 +1252,7 @@ static void batadv_bla_purge_backbone_gw(struct batadv_priv *bat_priv, int now)
 						  head, hash_entry) {
 				if (now)
 					goto purge_now;
-				if (!batadv_has_timed_out(READ_ONCE(backbone_gw->lasttime),
+				if (!batadv_has_timed_out(backbone_gw->lasttime,
 							  BATADV_BLA_BACKBONE_TIMEOUT))
 					continue;
 
