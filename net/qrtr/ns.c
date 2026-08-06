@@ -30,9 +30,9 @@ static struct {
 	struct sockaddr_qrtr bcast_sq;
 	struct list_head lookups;
 	u32 lookup_count;
-	struct workqueue_struct *workqueue;
-	struct work_struct work;
-	void (*saved_data_ready)(struct sock *sk);
+	struct kthread_worker kworker;
+	struct kthread_work work;
+	struct task_struct *task;
 	int local_node;
 } qrtr_ns;
 
@@ -430,8 +430,10 @@ static int ctrl_cmd_bye(struct sockaddr_qrtr *from)
 		msg.msg_namelen = sizeof(sq);
 
 		ret = kernel_sendmsg(qrtr_ns.sock, &msg, &iv, 1, sizeof(pkt));
-		if (ret < 0) {
-			pr_err("failed to send bye cmd\n");
+		if (ret < 0 && ret != -ENODEV) {
+			pr_err_ratelimited("send bye failed: [0x%x:0x%x] 0x%x ret: %d\n",
+					   srv->service, srv->instance,
+					   srv->port, ret);
 			goto delete_node;
 		}
 	}
@@ -509,8 +511,10 @@ static int ctrl_cmd_del_client(struct sockaddr_qrtr *from,
 		msg.msg_namelen = sizeof(sq);
 
 		ret = kernel_sendmsg(qrtr_ns.sock, &msg, &iv, 1, sizeof(pkt));
-		if (ret < 0) {
-			pr_err("failed to send del client cmd\n");
+		if (ret < 0 && ret != -ENODEV) {
+			pr_err_ratelimited("del client cmd failed: [0x%x:0x%x] 0x%x %d\n",
+					   srv->service, srv->instance,
+					   srv->port, ret);
 			return ret;
 		}
 	}

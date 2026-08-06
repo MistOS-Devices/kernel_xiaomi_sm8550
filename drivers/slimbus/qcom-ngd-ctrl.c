@@ -1848,12 +1848,23 @@ static int qcom_slim_ngd_ssr_pdr_notify(struct qcom_slim_ngd_ctrl *ctrl,
 	case QCOM_SSR_BEFORE_SHUTDOWN:
 	case SERVREG_SERVICE_STATE_DOWN:
 		if (ctrl->state != QCOM_SLIM_NGD_CTRL_DOWN) {
+			mutex_lock(&ctrl->suspend_resume_lock);
+			ctrl->state = QCOM_SLIM_NGD_CTRL_SSR_GOING_DOWN;
+			/*
+			 * Mark capability_timeout to false here to handle
+			 * BAM IRQ's from clean state.
+			 */
+			ctrl->capability_timeout = false;
+			SLIM_INFO(ctrl, "SLIM SSR going down\n");
 			pm_runtime_get_noresume(ctrl->ctrl.dev);
 			SLIM_INFO(ctrl, "SLIM %s: PM get_no_resume count:%d\n",
 				__func__, atomic_read(&ctrl->ctrl.dev->power.usage_count));
 			device_for_each_child(ctrl->ctrl.dev, NULL,
 					      qcom_slim_ngd_update_device_status);
 			qcom_slim_ngd_exit_dma(ctrl);
+			ctrl->state = QCOM_SLIM_NGD_CTRL_DOWN;
+			SLIM_INFO(ctrl, "SLIM SSR down\n");
+			mutex_unlock(&ctrl->suspend_resume_lock);
 		}
 		break;
 	case QCOM_SSR_AFTER_POWERUP:
